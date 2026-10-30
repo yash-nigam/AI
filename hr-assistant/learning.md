@@ -1,2 +1,22 @@
 Identify problems and solve those problems using features of AI
 Learn multiple features of AI by solving real world problems
+1 - since llm api is stateless and does not remember the previous question, 
+we need to include all previous conversation history (responses of the user and assistant) in every subsequent api call so that the llm has a context  and there is meaningful conversation
+
+2- Including entire conversation history in every api call creates the following problems
+api call message content doubles on every turn
+we will be charged more as more tokens are being passed
+since input data has increased the accuracy of llm reduces
+there is latency issue
+The limit can be breached
+
+3 - Persisting the conversation
+The conversation history with LLM will be lost if it is not saved to disk
+hence conversation history must be saved to disk
+persistent layer needs to be added
+
+Store each message - role and message per row in a database table
+There can be multiple conversation which i want con continue parallely
+and there can be a set of messages per conversation
+
+messages table and conversations table
