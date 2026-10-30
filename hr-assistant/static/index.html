@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HR Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="chat">
+    <header>
+      <div class="title"><span class="dot"></span>HR Assistant</div>
+      <button id="new-chat" title="Start a new conversation">New chat</button>
+    </header>
+    <main id="messages">
+      <div class="msg bot">Hi! I'm your HR assistant. How can I help you today?</div>
+    </main>
+    <form id="form">
+      <textarea id="input" rows="1" placeholder="Type your question..." autofocus></textarea>
+      <button id="send" type="submit">Send</button>
+    </form>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

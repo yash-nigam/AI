@@ -3,7 +3,8 @@ from typing import Optional
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from openai import OpenAI
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from db.models import autocreate_tables
 
 load_dotenv()  # reads .env into environment variables
@@ -11,10 +12,11 @@ OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 OPENAI_API_URL = os.environ["OPENAI_API_URL"]
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
-async def hello():
-    return {"message": "Hello, World!"}
+async def index():
+    return FileResponse("static/index.html")
 
 @app.get("/health")
 async def health_check():
@@ -29,7 +31,7 @@ async def chat(message: str, conversation_id: Optional[int] = None):
     # check if conversation id is provided else create new con id
     if conversation_id == None:
         from db.db import create_conversation
-        conversation = create_conversation(title = f"New ConversationL {message[:50]}")
+        conversation = create_conversation(title = f"New Conversation: {message[:50]}")
         conversation_id = conversation.id
     
     # use httpx module to send the message to opanapi chat endpoint and whatever response comes from openapi send it back to user
@@ -50,10 +52,17 @@ async def chat(message: str, conversation_id: Optional[int] = None):
     # print all messages
     print(f"Entire conversation history:\n {ch}")
     # perform the post call 
-    response = httpx.post(f"{OPENAI_API_URL}", json={
-        "model": "gpt-4o-mini",
-        "messages": ch
-    }, headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"})
+    # httpx defaults to a 5s timeout, which is too short for longer LLM answers
+    try:
+        response = httpx.post(f"{OPENAI_API_URL}", json={
+            "model": "gpt-4o-mini",
+            "messages": ch
+        }, headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, timeout=60)
+    except httpx.RequestError as e:
+        return JSONResponse(status_code=502, content={"detail": f"Could not reach OpenAI: {type(e).__name__}"})
+
+    if response.status_code != 200:
+        return JSONResponse(status_code=502, content={"detail": f"OpenAI error {response.status_code}: {response.text[:200]}"})
 
     # Add assistant response to conversation history/table
     assistant_reply = response.json()['choices'][0]['message']['content']
@@ -61,7 +70,7 @@ async def chat(message: str, conversation_id: Optional[int] = None):
     insert_message(conversation_id=conversation_id, role="assistant", content=assistant_reply)
 
     #extract the actual response from the OpenAI API and not the whole json 
-    return {"response": f"You said: {message} and OpenAI responded: {response.json()['choices'][0]['message']['content']}"}
+    return {"response": assistant_reply, "conversation_id": conversation_id}
 
 
 if __name__ == "__main__":
