@@ -20,3 +20,13 @@ There can be multiple conversation which i want con continue parallely
 and there can be a set of messages per conversation
 
 messages table and conversations table
+there will be a conversation id as a foreing in messages table
+in the /chat endpoint we will add conversation_id parameter
+if there is no conversation id is passed then a new conversation id is created and all messages of this conversation will use that conversation id
+
+insert the user provided prompt or message into the the message table along with new conversation id
+
+after inserting, read all the messages from message table as conversation history array
+as we need to pass the entire history to the api
+
+
