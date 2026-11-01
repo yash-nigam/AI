@@ -21,7 +21,7 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String, index=True)
     created_at = Column(DateTime, default=_now)
-
+    tokens = Column(String, index=True)
     messages = relationship("Message", back_populates="conversation")
 
 class Message(Base):
@@ -30,6 +30,7 @@ class Message(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"))
     role = Column(String, index=True)
     content = Column(String, index=True)
+    tokens = Column(String, index=True)
     created_at = Column(DateTime, default=_now)
     conversation = relationship("Conversation", back_populates="messages")
 

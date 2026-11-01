@@ -1,3 +1,5 @@
+# number all the points below
+
 Identify problems and solve those problems using features of AI
 Learn multiple features of AI by solving real world problems
 1 - since llm api is stateless and does not remember the previous question, 
@@ -28,5 +30,10 @@ insert the user provided prompt or message into the the message table along with
 
 after inserting, read all the messages from message table as conversation history array
 as we need to pass the entire history to the api
+
+An additional problems which comes up is the number of token used per api call 
+we need to know exact number of tokens per api call to claculate cost
+keep a track of tokens per message in separate tokens field in messages and conversation table
+
 
 

@@ -9,8 +9,8 @@ from sqlalchemy.orm import sessionmaker
 Session = sessionmaker(bind=engine)
 session = Session()
 
-def insert_message(conversation_id: int, role: str, content: str):
-    message = Message(conversation_id=conversation_id, role=role, content=content)
+def insert_message(conversation_id: int, role: str, content: str, tokens: int = 0):
+    message = Message(conversation_id=conversation_id, role=role, content=content, tokens=tokens)
     session.add(message)
     session.commit()
     session.close()
@@ -27,3 +27,13 @@ def create_conversation(title: str):
     session.refresh(conversation)  # reload id/created_at so they are readable after the session is closed
     session.close()
     return conversation
+
+def update_conversation_tokens(conversation_id: str, tokens: int):
+    conversation = session.query(Conversation).get(conversation_id)
+    if conversation.tokens is None:
+        raise ValueError(f"Conversation with id {conversation_id} not found")
+    conversation.tokens = int((conversation.tokens or 0)) + tokens
+    session.commit()
+    session.refresh(conversation)
+
+    
