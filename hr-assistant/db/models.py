@@ -23,6 +23,7 @@ class Conversation(Base):
     created_at = Column(DateTime, default=_now)
     tokens = Column(String, index=True)
     messages = relationship("Message", back_populates="conversation")
+    summaries = relationship("ConversationSummary", back_populates="conversation")
 
 class Message(Base):
     __tablename__ = "messages"
@@ -33,6 +34,15 @@ class Message(Base):
     tokens = Column(String, index=True)
     created_at = Column(DateTime, default=_now)
     conversation = relationship("Conversation", back_populates="messages")
+
+class ConversationSummary(Base):
+    __tablename__ = "conversation_summaries"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"))
+    summary = Column(String, index=True)
+    created_at = Column(DateTime, default=_now)
+    lastmessage_id = Column(Integer, ForeignKey("messages.id"))
+    conversation = relationship("Conversation", back_populates="summaries")
 
 def autocreate_tables():
     engine = create_engine(DB_FILE, echo=True)
