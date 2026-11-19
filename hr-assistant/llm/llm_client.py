@@ -3,14 +3,24 @@ import httpx
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from db.db import list_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
+from embed import find_relevant_chunks
 
 load_dotenv()  # reads .env into environment variables
 OPENAI_API_URL = os.environ["OPENAI_API_URL"]
 
+# function enrivh prompt will read relevant chunks from the chroma db and attach it to the original promp
+def enrich_prompt(prompt: str) -> str:
+    relevant_chunks = find_relevant_chunks(prompt)
+    top_chunk = relevant_chunks[0] if relevant_chunks else ""
+    enriched_prompt = f"here is the relevent infomation from my internal policy DB for below question:{top_chunk['text']}, Question : {prompt}"
+    return enriched_prompt
 
 def call_llm(message: str, conversation_id=None):
     # returns (assistant_reply, input_tokens, output_tokens, conversation_id) on success,
     # or a JSONResponse on failure
+
+    enriched_prompt = enrich_prompt(message)
+
     # check if conversation id is provided else create new con id
     print(f"Checking if conversation_id is provided: {conversation_id}")
     if conversation_id == None:
@@ -66,6 +76,9 @@ def call_llm(message: str, conversation_id=None):
     print(f"Conversation history loaded for conversation_id {conversation_id}: {ch}")
     # add the latest user message to the conversation history
     ch.append({"role": "user", "content": message})
+
+    # adding the enriched prompt to the conversation history
+    ch.append({"role": "developer", "content": f"Enriched prompt: {enriched_prompt}"})
 
     # perform the post call
     # httpx defaults to a 5s timeout, which is too short for longer LLM answers

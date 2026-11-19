@@ -7,3 +7,5 @@ __pycache__/
 
 *.db
 .continue
+
+chroma_db/

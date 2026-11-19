@@ -75,3 +75,25 @@
   - It is sent only the summary of the first 10 messages and the 11th message
 - Similarly for the 12th message, it is sent the summary of the first 10 messages and the 2 newer messages
 - In this way we can keep a check on the growing token usage in a conversation
+
+
+How to read a document and use it in our llm
+---
+
+while calling llm we need to call with the relevant text to the llm
+whatever prompt we type that needs to pickup the relevant chunk first
+enrich chunk with relevant llm 
+all calls will me made from the llm client
+
+in the chroma db we should store the actual data along with embedding data so that when en embedding match is found for a prompt
+then we can pull the actual text data for that match
+
+llm can also be used to chunk the files - it will keep all related chunks together along with some duplication
+and every chunk includes metadata
+at the same time be independent
+
+--
+
+also we may not always not want to read from chorma db, as the question really needs  a lookup in policy file or not
+
+
