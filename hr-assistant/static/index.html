@@ -7,18 +7,31 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="chat">
-    <header>
-      <div class="title"><span class="dot"></span>HR Assistant</div>
-      <button id="new-chat" title="Start a new conversation">New chat</button>
-    </header>
-    <main id="messages">
-      <div class="msg bot">Hi! I'm your HR assistant. How can I help you today?</div>
-    </main>
-    <form id="form">
-      <textarea id="input" rows="1" placeholder="Type your question..." autofocus></textarea>
-      <button id="send" type="submit">Send</button>
-    </form>
+  <div class="app">
+    <!-- left navigation pane: list of all conversations -->
+    <aside id="sidebar">
+      <div class="side-head">
+        <span>Conversations</span>
+        <button id="new-chat" title="Start a new conversation">+ New</button>
+      </div>
+      <ul id="conv-list"></ul>
+    </aside>
+
+    <div class="chat">
+      <header>
+        <div class="title">
+          <button id="toggle-side" title="Show conversations">&#9776;</button>
+          <span class="dot"></span>HR Assistant
+        </div>
+      </header>
+      <main id="messages">
+        <div class="msg bot">Hi! I'm your HR assistant. How can I help you today?</div>
+      </main>
+      <form id="form">
+        <textarea id="input" rows="1" placeholder="Type your question..." autofocus></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
+    </div>
   </div>
   <script src="/static/app.js"></script>
 </body>

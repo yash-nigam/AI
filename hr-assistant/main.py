@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from db.models import autocreate_tables
 from llm.llm_client import call_llm
-from db.db import update_conversation_tokens, list_message, insert_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
+from db.db import list_conversations, update_conversation_tokens, list_message, insert_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
 
 load_dotenv()  # reads .env into environment variables
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
@@ -24,6 +24,19 @@ async def index():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# sidebar: list all conversations, newest first
+@app.get("/conversations")
+async def get_conversations():
+    return [
+        {"id": c.id, "title": c.title, "created_at": c.created_at.isoformat() if c.created_at else None}
+        for c in list_conversations()
+    ]
+
+# load the full history of one conversation (user + assistant messages, oldest first)
+@app.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: int):
+    return [{"id": m.id, "role": m.role, "content": m.content} for m in list_message(conversation_id=conversation_id)]
 
 # history needs to be maintained for both user and assistant messages, so we can send the entire history to OpenAI API for context
 # this needs to be sent on every request to OpenAI API, so that it can generate a response based on the entire conversation history

@@ -33,6 +33,12 @@ def create_conversation(title: str):
     session.close()
     return conversation
 
+def list_conversations():
+    # newest conversation first, used by the sidebar in the UI
+    conversations = session.query(Conversation).order_by(Conversation.id.desc()).all()
+    session.close()
+    return conversations
+
 def update_conversation_tokens(conversation_id: str, tokens: int):
     conversation = session.query(Conversation).get(conversation_id)
     if conversation is None:

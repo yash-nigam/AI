@@ -174,3 +174,6 @@
 Prompt caching should also be done semantically meaning the the users prompt should be semantically matched to the history of prompts
 
 for this use chroma db to store embeddings of prompts and responses in in a prompts table
+
+
+all the conversations should be shown as a list in the left navigation bar in the ui and clicking on the conversation should load the conversation history into the main ui as bubbles
