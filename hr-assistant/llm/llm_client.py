@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from db.db import list_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
 from embed import find_relevant_chunks
-from llm.prompt_cache import cache_response, find_response_in_conversation_history
+from llm.prompt_cache import cache_embedded_prompt_response_in_chroma_db, cache_response, fetch_cached_response_from_chroma_db, find_response_in_conversation_history
 
 load_dotenv()  # reads .env into environment variables
 OPENAI_API_URL = os.environ["OPENAI_API_URL"]
@@ -23,13 +23,26 @@ def call_llm(message: str, conversation_id=None):
     # Prompt caching
     # Check if the users question is already present in the conversation history, 
     # if yes then return the previous answer from the conversation history
-    response = find_response_in_conversation_history(message, conversation_id)
-    if response:
-        print(f"Found previous response for message: {message[:50]} in conversation_id {conversation_id}")
-        # if the flow reaches here it means the user has asked the same question again, so we can return the previous response from the conversation history
-        # no need to go through the entire LLM call flow again, just return the previous response from the conversation history
-        # return the same 4-tuple shape as a normal call; 0 tokens since no LLM call was made
-        return response, 0, 0, conversation_id
+    
+    # find lexical match for the prompt in the conversation history, if found return the response from the conversation history
+    if conversation_id is not None:
+        response = find_response_in_conversation_history(message, conversation_id)
+        if response:
+            print(f"Found previous response for message: {message[:50]} in conversation_id {conversation_id}")
+            # if the flow reaches here it means the user has asked the same question again, so we can return the previous response from the conversation history
+            # no need to go through the entire LLM call flow again, just return the previous response from the conversation history
+            # return the same 4-tuple shape as a normal call; 0 tokens since no LLM call was made
+            return response, 0, 0, conversation_id
+        
+        # find semantic match for the prompt in the conversation history using Chroma DB, if found return the response from the conversation history
+        response = fetch_cached_response_from_chroma_db(message, conversation_id)
+        if response:
+            print(f"Found previous response for message: {message[:50]} in conversation_id {conversation_id} from Chroma DB")
+            # This is the one place we DO insert into SQL from call_llm: the paraphrased question
+            # isn't in the messages table yet, and main.py skips inserts when tokens are 0 (cache hit),
+            # so without this the exchange would be missing from the user's history.
+            cache_response(message, response, conversation_id)
+            return response, 0, 0, conversation_id
 
 
     enriched_prompt = enrich_prompt(message)
@@ -112,9 +125,14 @@ def call_llm(message: str, conversation_id=None):
 
     print(f"Response from OpenAI API:\n{pretty_response}\n")
 
-    # cache the response for future use in the messages table
-    cache_response(message, response.json()['choices'][0]['message']['content'], conversation_id) 
-    #function to cache the response in the messages table, not implemented yet
+    reply = response.json()['choices'][0]['message']['content']
+    # NOTE: we deliberately do NOT call cache_response() (SQL insert) here.
+    # On a cache miss, main.py's /chat endpoint already inserts the user + assistant messages
+    # (with token counts) after call_llm returns. Inserting here too would store every
+    # new exchange twice.
+    # We only store the embedded prompt/response in Chroma here, so that later
+    # similar questions can hit the semantic cache.
+    cache_embedded_prompt_response_in_chroma_db(message, reply, conversation_id)
 
     # Read input tokens
     input_tokens = response.json()["usage"]["prompt_tokens"]

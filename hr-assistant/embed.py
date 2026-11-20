@@ -10,11 +10,11 @@ from openai import OpenAI
 load_dotenv()  # reads OPENAI_API_KEY from .env
 client = OpenAI()
 
-DOCS_DIR = Path("../hr-assistant/docs")
-CHROMA_DIR = Path("./chroma_db")       # Chroma will persist here (just a folder on disk)
+DOCS_DIR = Path(os.environ["DOCS_DIR"])
+CHROMA_DIR = Path(os.environ["CHROMA_DIR"])  # Chroma will persist here (just a folder on disk)
 
-EMBED_MODEL = "text-embedding-3-small"  # 1536-dim, cheap ($0.02 / 1M tokens)
-CHAT_MODEL = "gpt-4o-mini"
+EMBED_MODEL = os.environ["EMBED_MODEL"]  # e.g. text-embedding-3-small: 1536-dim, cheap ($0.02 / 1M tokens)
+CHAT_MODEL = os.environ["CHAT_MODEL"]
 
 #enc = tiktoken.get_encoding("cl100k_base")  # tokenizer used by the embedding models
 enc = tiktoken.encoding_for_model(EMBED_MODEL)
@@ -209,7 +209,7 @@ def find_relevant_chunks(query: str, top_k: int = 5) -> list[dict]:
     # convert query to embedding
     # fire query on vector to find top K chunks
     query_embedding = client.embeddings.create(
-        model="text-embedding-3-small",
+        model=EMBED_MODEL,
         input=query
     ).data[0].embedding
 

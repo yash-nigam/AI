@@ -170,3 +170,7 @@
 - If a question matches a previous question to a certain extent, we can retrieve the top matching questions and get their answers
 - Keep a note of relevant previously asked questions
 - Other ways to reduce the cost of the LLM: caching responses
+
+Prompt caching should also be done semantically meaning the the users prompt should be semantically matched to the history of prompts
+
+for this use chroma db to store embeddings of prompts and responses in in a prompts table
