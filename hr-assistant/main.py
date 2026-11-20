@@ -36,10 +36,15 @@ async def chat(message: str, conversation_id: Optional[int] = None):
         return result
     assistant_reply, input_tokens, output_tokens, conversation_id = result
 
+    # cache hit: call_llm returns 0 tokens (no LLM call), and the Q&A already exists in the DB,
+    # so skip inserting duplicate messages and updating token counts
+    if input_tokens == 0 and output_tokens == 0:
+        return {"response": assistant_reply, "conversation_id": conversation_id}
+
     # insert user message into message table along with token usage for the conversation
     from db.db import insert_message
     insert_message(conversation_id=conversation_id, role="user", content=message, tokens=input_tokens)
- 
+
     # conversation_history.append({"role": "assistant", "content": assistant_reply})
     insert_message(conversation_id=conversation_id, role="assistant", content=assistant_reply, tokens=output_tokens)
 

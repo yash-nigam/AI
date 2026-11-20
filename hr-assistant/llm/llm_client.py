@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from db.db import list_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
 from embed import find_relevant_chunks
+from llm.prompt_cache import cache_response, find_response_in_conversation_history
 
 load_dotenv()  # reads .env into environment variables
 OPENAI_API_URL = os.environ["OPENAI_API_URL"]
@@ -18,6 +19,18 @@ def enrich_prompt(prompt: str) -> str:
 def call_llm(message: str, conversation_id=None):
     # returns (assistant_reply, input_tokens, output_tokens, conversation_id) on success,
     # or a JSONResponse on failure
+
+    # Prompt caching
+    # Check if the users question is already present in the conversation history, 
+    # if yes then return the previous answer from the conversation history
+    response = find_response_in_conversation_history(message, conversation_id)
+    if response:
+        print(f"Found previous response for message: {message[:50]} in conversation_id {conversation_id}")
+        # if the flow reaches here it means the user has asked the same question again, so we can return the previous response from the conversation history
+        # no need to go through the entire LLM call flow again, just return the previous response from the conversation history
+        # return the same 4-tuple shape as a normal call; 0 tokens since no LLM call was made
+        return response, 0, 0, conversation_id
+
 
     enriched_prompt = enrich_prompt(message)
 
@@ -98,6 +111,10 @@ def call_llm(message: str, conversation_id=None):
     pretty_response = json.dumps(response.json(), indent=4)
 
     print(f"Response from OpenAI API:\n{pretty_response}\n")
+
+    # cache the response for future use in the messages table
+    cache_response(message, response.json()['choices'][0]['message']['content'], conversation_id) 
+    #function to cache the response in the messages table, not implemented yet
 
     # Read input tokens
     input_tokens = response.json()["usage"]["prompt_tokens"]

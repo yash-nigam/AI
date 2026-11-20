@@ -77,23 +77,96 @@
 - In this way we can keep a check on the growing token usage in a conversation
 
 
-How to read a document and use it in our llm
+## 12. Reading a Document and Using It in the LLM
+
+- While calling the LLM, we need to call it with the relevant text
+- Whatever prompt we type needs to pick up the relevant chunk first
+- Enrich the chunk with the relevant LLM
+- All calls will be made from the LLM client
+- In ChromaDB we should store the actual data along with the embedding data, so that when an embedding match is found for a prompt, we can pull the actual text data for that match
+- An LLM can also be used to chunk the files
+  - It will keep all related chunks together, along with some duplication
+  - Every chunk includes metadata
+  - At the same time, every chunk should be independent
+- We may not always want to read from ChromaDB, as the question may or may not really need a lookup in the policy file
+
 ---
 
-while calling llm we need to call with the relevant text to the llm
-whatever prompt we type that needs to pickup the relevant chunk first
-enrich chunk with relevant llm 
-all calls will me made from the llm client
+## Assignment 1: Chatbot for Internal Company Documents
 
-in the chroma db we should store the actual data along with embedding data so that when en embedding match is found for a prompt
-then we can pull the actual text data for that match
+### Problem Statement
 
-llm can also be used to chunk the files - it will keep all related chunks together along with some duplication
-and every chunk includes metadata
-at the same time be independent
+- How to design a system - a chatbot for my internal company documents - and a high-level design of it
+- The documents are sitting in various locations: some in Confluence, some as PDFs, some as Word documents, and some in doc sites. How do we design a system for that?
+- Total size is 50 GB
+- How to handle changes in documents, chunking, and where the data will be stored
+- What will the overall RAG pipeline look like, and what are the nuances?
 
---
+### Requirements and Constraints
 
-also we may not always not want to read from chorma db, as the question really needs  a lookup in policy file or not
+- After a change in any document, the change should appear within 24 hours at most
+- We can use a hash to check whether a file has changed
+- The maximum file size will be 5 GB, and the total will not be more than 50 GB
+- The documents will not have images, but will have tables and formatting
+- Pagination may be used to solve the 5 GB file problem
+- Formatting is not guaranteed, so the prompt needs to be created accordingly
+- The LLM also has a limit on request body size
 
+### Handling Tables
 
+- There are also tables in the documents
+  - Ask the LLM to summarize the table, or keep metadata on top
+  - While querying, the descriptive data is used from the database
+- Whenever you find a table, my embedding engine does not allow searching solely based on the table
+  - So create a summary text for the table, so that the table can be identified using the summary text or metadata
+- If the metadata of a table is matched in the vector DB, we can retrieve the original table from the chunk and pass that table back to the LLM
+
+### Handling Images
+
+- The same applies to images: create a text alternative of the image, so that the text becomes relevant for the image and search works
+- We can pass the image back to the LLM
+- The intent of embedding is to make search work perfectly
+
+### Chunking Nuances
+
+- Some data between two sections can be lost
+- If the LLM is not able to chunk the last part of a section, those lines should be taken into the next chunk
+- This smartness has to be added to the RAG pipeline so that we don't miss any data
+- In order to chunk my data I am using an LLM
+  - That is a trade-off I am taking
+  - I am OK spending on every chunking cycle, but my chunks are perfect, and the consumer will get the right information only
+
+### Vector Database and Embeddings
+
+- The vector DB should scale based on the data size
+- There are dedicated databases for embedding algorithms
+- Just by searching "dog", I can find the photo of the dog
+- The embedding algorithm needs to be language specific
+- Media embeddings are completely different
+
+### Open Questions
+
+- Is it worth maintaining a RAG pipeline where the human effort is higher if there is a low number of users?
+- Can one table be one chunk?
+- There can be cases where... *(incomplete note)*
+
+---
+
+## Assignment 2: Natural Language Questions over SQL Tables
+
+- We have SQL tables with hundreds of tables, and someone asks a question in human language instead of SQL
+- We have access to the DB and can run the query - we need a system that can do that
+- There can be 2000 tables - we need an interface where a natural language question can be asked and answers can be given
+- We do not always need a RAG system, as RAG has some fundamental problems
+  - PageIndex is an alternative to RAG
+
+---
+
+## Assignment 3: Prompt Caching
+
+- If most of the questions are common, they can be stored in advance instead of searching for them or querying them every time, as each call requires an LLM call, which costs money
+- How do we design the solution?
+- I want to avoid LLM calls
+- If a question matches a previous question to a certain extent, we can retrieve the top matching questions and get their answers
+- Keep a note of relevant previously asked questions
+- Other ways to reduce the cost of the LLM: caching responses
