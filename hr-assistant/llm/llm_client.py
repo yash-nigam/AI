@@ -1,14 +1,56 @@
+import json
 import os
-import httpx
+import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from db.db import list_message, insert_or_update_conversation_summary, create_conversation, get_conversation_summary, list_messaages_after_summary
 from embed import find_relevant_chunks
 from llm.prompt_cache import cache_embedded_prompt_response_in_chroma_db, cache_response, fetch_cached_response_from_chroma_db, find_response_in_conversation_history
-
 load_dotenv()  # reads .env into environment variables
 OPENAI_API_URL = os.environ["OPENAI_API_URL"]
+# the SDK appends /chat/completions itself, so strip it from the configured endpoint URL
+OPENAI_BASE_URL = OPENAI_API_URL.removesuffix("/").removesuffix("/chat/completions")
+openai_client = OpenAI(base_url=OPENAI_BASE_URL, api_key=os.environ["OPENAI_API_KEY"], timeout=60)
 
+# A tool to return current date and time in ISO format, for use in LLM prompts. This is a simple example of a tool that can be used to provide additional context to the LLM.
+# below is a tool definition in json format, which will be passed to the OpenAI API in the tools parameter of the chat.completions.create() call. The LLM can then call this tool by name, and the API will return the tool's output to the LLM.
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_datetime",
+            "description": "Returns the current date and time in a human-readable format.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "greet_user",
+            "description": "Greets the user by name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the user to greet."
+                    }
+                },
+                "required": ["name"]
+            }
+        }
+    }
+]
+def get_current_datetime():
+    from datetime import datetime
+    # human-readable, e.g. "Saturday, 21 November 2026, 10:52 AM"
+    now = datetime.now()
+    return f"Today's date and time: {now.strftime('%A, %d %B %Y, %I:%M %p')}"
 # function enrivh prompt will read relevant chunks from the chroma db and attach it to the original promp
 def enrich_prompt(prompt: str) -> str:
     relevant_chunks = find_relevant_chunks(prompt)
@@ -106,26 +148,49 @@ def call_llm(message: str, conversation_id=None):
     # adding the enriched prompt to the conversation history
     ch.append({"role": "developer", "content": f"Enriched prompt: {enriched_prompt}"})
 
-    # perform the post call
-    # httpx defaults to a 5s timeout, which is too short for longer LLM answers
+    # perform the chat completions call using the OpenAI SDK
+    # timeout (60s) is configured on the client, as the default is too short for longer LLM answers
     try:
-        response = httpx.post(f"{OPENAI_API_URL}", json={
-            "model": "gpt-4o-mini",
-            "messages": ch
-        }, headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, timeout=60)
-    except httpx.RequestError as e:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini", 
+            messages=ch,
+            tools=TOOLS,)
+    except openai.APIStatusError as e:
+        return JSONResponse(status_code=502, content={"detail": f"OpenAI error {e.status_code}: {str(e.response.text)[:200]}"})
+    except openai.APIConnectionError as e:
         return JSONResponse(status_code=502, content={"detail": f"Could not reach OpenAI: {type(e).__name__}"})
 
-    if response.status_code != 200:
-        return JSONResponse(status_code=502, content={"detail": f"OpenAI error {response.status_code}: {response.text[:200]}"})
-
     # print response from OpenAI API in pretty format
-    import json
-    pretty_response = json.dumps(response.json(), indent=4)
+    print(f"Response from OpenAI API:\n{response.model_dump_json(indent=4)}\n")
 
-    print(f"Response from OpenAI API:\n{pretty_response}\n")
+    # check if there is a tool call in the response, if yes then run the tool(s) and return the tool output directly to the user
+    tool_calls = response.choices[0].message.tool_calls
+    if tool_calls:
+        print(f"Executing tool calls detected in OpenAI API response for conversation_id {conversation_id}...")
+        tool_outputs = []
+        for tool_call in tool_calls:
+            tool_name = tool_call.function.name
+            tool_args = tool_call.function.arguments
+            print(f"Tool call detected in OpenAI API response: {tool_name} with arguments: {tool_args}")
+            if tool_name == "get_current_datetime":
+                tool_response = get_current_datetime()
+            elif tool_name == "greet_user":
+                # arguments arrive as a JSON string, e.g. '{"name": "Yash"}'
+                args = json.loads(tool_args or "{}")
+                name = args.get("name", "User")
+                tool_response = f"Hello, {name}, you are being greeted by a Tool Call!"
+            else:
+                print(f"Unknown tool call detected in OpenAI API response: {tool_name}")
+                return JSONResponse(status_code=400, content={"detail": f"Unknown tool call detected in OpenAI API response: {tool_name}"})
+            print(f"Tool response from {tool_name}: {tool_response}")
+            tool_outputs.append(tool_response)
 
-    reply = response.json()['choices'][0]['message']['content']
+        # send the tool output itself back to the UI (no second LLM call).
+        # Not cached in Chroma: tool output such as the current time goes stale.
+        tool_reply = "\n".join(tool_outputs)
+        return tool_reply, response.usage.prompt_tokens, response.usage.completion_tokens, conversation_id
+
+    reply = response.choices[0].message.content
     # NOTE: we deliberately do NOT call cache_response() (SQL insert) here.
     # On a cache miss, main.py's /chat endpoint already inserts the user + assistant messages
     # (with token counts) after call_llm returns. Inserting here too would store every
@@ -135,12 +200,12 @@ def call_llm(message: str, conversation_id=None):
     cache_embedded_prompt_response_in_chroma_db(message, reply, conversation_id)
 
     # Read input tokens
-    input_tokens = response.json()["usage"]["prompt_tokens"]
-    output_tokens = response.json()["usage"]["completion_tokens"]
+    input_tokens = response.usage.prompt_tokens
+    output_tokens = response.usage.completion_tokens
     print(f"Input tokens: {input_tokens}, Output tokens: {output_tokens}, Total tokens: {input_tokens + output_tokens}")
 
     # Add assistant response to conversation history/table
-    assistant_reply = response.json()['choices'][0]['message']['content']
+    assistant_reply = reply
 
     return assistant_reply, input_tokens, output_tokens, conversation_id
 
@@ -157,19 +222,18 @@ def summarize_conversation(conversation_id: int):
         ch.append({"role": m.role, "content": m.content})
     print(f"Conversation history loaded for conversation_id {conversation_id}:{ch}\n")
 
-    # perform the post call to OpenAI API to summarize the conversation
+    # perform the chat completions call using the OpenAI SDK to summarize the conversation
     try:
-        response = httpx.post(f"{OPENAI_API_URL}", json={
-            "model": "gpt-4o-mini",
-            "messages": [{"role": "developer", "content": "Summarize the following conversation to less than 100 words. Keep only facts and important information. Ignore pleasentaries and small talk."}] + ch
-        }, headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, timeout=60)
-    except httpx.RequestError as e:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "developer", "content": "Summarize the following conversation to less than 100 words. Keep only facts and important information. Ignore pleasentaries and small talk."}] + ch,
+        )
+    except openai.APIStatusError as e:
+        return JSONResponse(status_code=502, content={"detail": f"OpenAI error {e.status_code}: {str(e.response.text)[:200]}"})
+    except openai.APIConnectionError as e:
         return JSONResponse(status_code=502, content={"detail": f"Could not reach OpenAI: {type(e).__name__}"})
 
-    if response.status_code != 200:
-        return JSONResponse(status_code=502, content={"detail": f"OpenAI error {response.status_code}: {response.text[:200]}"})
-
-    summary = response.json()['choices'][0]['message']['content']
+    summary = response.choices[0].message.content
     print(f"Conversation summarized for conversation_id {conversation_id}: {summary}\n")
 
     # insert the summary into the conversation_summaries table

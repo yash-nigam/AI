@@ -171,9 +171,48 @@
 - Keep a note of relevant previously asked questions
 - Other ways to reduce the cost of the LLM: caching responses
 
-Prompt caching should also be done semantically meaning the the users prompt should be semantically matched to the history of prompts
+### Semantic Prompt Caching
 
-for this use chroma db to store embeddings of prompts and responses in in a prompts table
+- Prompt caching should also be done semantically, meaning the user's prompt should be semantically matched against the history of prompts
+- Use ChromaDB to store the embeddings of prompts and responses in a prompts table
 
+### Conversation List in the UI
 
-all the conversations should be shown as a list in the left navigation bar in the ui and clicking on the conversation should load the conversation history into the main ui as bubbles
+- All the conversations should be shown as a list in the left navigation bar of the UI
+- Clicking on a conversation should load its conversation history into the main UI as chat bubbles
+
+---
+
+## 13. Agents: Going Beyond Text
+
+- An agent should not only generate and find text, but also perform additional operations and activities for me
+- An LLM is only text prediction - it cannot take any action, it can only give information
+- The LLM will tell us that an action needs to be performed
+- The brain is borrowed from OpenAI and the body is our own
+
+## 14. Tool Calling
+
+- The LLM recommends an activity by tool calling
+- Tools are passed to the LLM with a name and a description, and the LLM replies with the name of the tool to call
+- ChatGPT (the product) has tools, but the model itself does not have tools
+- The flow:
+  - The app executes the tool and passes the result back to the LLM
+  - The result is passed back with the role `tool`
+  - The tool call id is important, as the mapping between the call and its result is done using it
+
+## 15. Risks and Guardrails for Tools
+
+- There are risks associated with tools, so guardrails should be built around them
+- The LLM should not listen to overriding instructions
+- Guardrails are also business rules around a tool
+  - Example: do not create a new ticket if an old ticket has already been created
+
+## 16. Sequential Tool Calls
+
+- What if a tool call suggests another tool call?
+- Tool calls can be sequential, where the result of one tool call leads the LLM to request the next one
+
+## 17. The Agent Loop
+
+- We keep on making tool calls until all the tool calls are finished
+- Reasoning in a loop until the goal is finished is called the agent loop
